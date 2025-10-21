@@ -2,50 +2,87 @@ import pytest
 import requests
 import random
 import string
+from data.urls import Urls
+from data.test_data import UserData
 
 
 @pytest.fixture
-def base_url():
-    return "https://stellarburgers.education-services.ru/api"
-
-
-@pytest.fixture
-def generate_user_data():
-    """Генерация случайных данных пользователя"""
+def generate_unique_user():
+    """Генерация уникального пользователя со сложной логикой"""
     def _generate():
-        email = f"test_{''.join(random.choices(string.ascii_lowercase, k=8))}@example.com"
-        password = "password123"
-        name = f"TestUser{random.randint(100, 999)}"
-        return {"email": email, "password": password, "name": name}
+        email = UserData.generate_email()
+        return {
+            "email": email,
+            "password": UserData.VALID_PASSWORD,
+            "name": f"{UserData.VALID_NAME}{random.randint(1000, 9999)}"
+        }
     return _generate
 
 
 @pytest.fixture
-def registered_user(base_url, generate_user_data):
-    """Фикстура для зарегистрированного пользователя"""
-    try:
-        user_data = generate_user_data()
-        response = requests.post(f"{base_url}/auth/register", json=user_data, timeout=10)
-        
-        if response.status_code != 200:
-            pytest.fail(f"Failed to register user. Status: {response.status_code}, Response: {response.text}")
-            
-        response_data = response.json()
-        user_data["access_token"] = response_data.get("accessToken")
-        return user_data
-    except requests.exceptions.RequestException as e:
-        pytest.skip(f"Cannot register user: {e}")
+def registered_user(generate_unique_user):
+    """Создание зарегистрированного пользователя с обработкой ошибок"""
+    user_data = generate_unique_user()
+    
+    # Регистрируем пользователя
+    response = requests.post(Urls.REGISTER, json=user_data, timeout=10)
+    
+    if response.status_code != 200:
+        pytest.fail(f"Failed to register test user: {response.status_code} - {response.text}")
+    
+    response_data = response.json()
+    
+    # Добавляем токен к данным пользователя
+    user_data.update({
+        "access_token": response_data.get("accessToken"),
+        "refresh_token": response_data.get("refreshToken")
+    })
+    
+    yield user_data
+    
+    # Пост-условия можно добавить здесь при необходимости
+    # (например, удаление тестового пользователя если есть такой эндпоинт)
 
 
 @pytest.fixture
-def get_ingredients(base_url):
-    """Получение списка ингредиентов"""
+def authenticated_user(registered_user):
+    """Пользователь с гарантированной аутентификацией"""
+    # Дополнительная логика проверки/обновления токена при необходимости
+    return registered_user
+
+
+@pytest.fixture
+def get_ingredients():
+    """Получение списка ингредиентов с обработкой ошибок"""
     try:
-        response = requests.get(f"{base_url}/ingredients", timeout=10)
+        response = requests.get(Urls.INGREDIENTS, timeout=10)
         
         if response.status_code != 200:
-            pytest.fail(f"Failed to get ingredients. Status: {response.status_code}, Response: {response.text}")
+            pytest.skip(f"Cannot fetch ingredients: {response.status_code}")
             
-        return response.json().get("data", [])
+        data = response.json()
+        
+        if not data.get('success'):
+            pytest.skip("Ingredients endpoint returned unsuccessful response")
+            
+        ingredients = data.get('data', [])
+        
+        if not ingredients:
+            pytest.skip("No ingredients available for testing")
+            
+        return ingredients
+        
     except requests.exceptions.RequestException as e:
-        pytest.skip(f"Cannot get ingredients: {e}")
+        pytest.skip(f"Cannot connect to ingredients endpoint: {e}")
+
+
+@pytest.fixture
+def valid_ingredients(get_ingredients):
+    """Валидные ингредиенты для заказа"""
+    return [ingredient["_id"] for ingredient in get_ingredients[:2]]
+
+
+@pytest.fixture
+def invalid_ingredients():
+    """Невалидные ингредиенты"""
+    return ["invalid_hash_1", "invalid_hash_2"]

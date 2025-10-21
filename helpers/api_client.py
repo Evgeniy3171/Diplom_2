@@ -1,5 +1,6 @@
 import requests
 import allure
+import pytest
 from typing import Dict, Any, List
 
 
