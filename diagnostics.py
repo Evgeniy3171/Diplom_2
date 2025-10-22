@@ -1,5 +1,10 @@
 import requests
 import json
+import logging
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+logger = logging.getLogger(__name__)
 
 
 def check_api_availability():
@@ -19,12 +24,14 @@ def check_api_availability():
         "name": "Test User"
     }
     
-    print("🔍 Проверка доступности API Stellar Burgers...")
-    print("=" * 60)
+    logger.info("Проверка доступности API Stellar Burgers")
+    logger.info("=" * 50)
+    
+    results = {}
     
     for endpoint_name, url in endpoints.items():
-        print(f"\n📡 Тестируем {endpoint_name}...")
-        print(f"   URL: {url}")
+        logger.info(f"Тестируем {endpoint_name}")
+        logger.info(f"URL: {url}")
         
         try:
             if endpoint_name == "GET /ingredients":
@@ -36,25 +43,35 @@ def check_api_availability():
             elif endpoint_name == "POST /orders":
                 response = requests.post(url, json={"ingredients": []}, timeout=10)
             
-            print(f"   ✅ Статус: {response.status_code}")
+            logger.info(f"Статус: {response.status_code}")
             
             if response.status_code == 200:
                 try:
                     data = response.json()
-                    print(f"   📊 Success: {data.get('success', 'N/A')}")
+                    logger.info(f"Success: {data.get('success', 'N/A')}")
                     if endpoint_name == "GET /ingredients" and "data" in data:
-                        print(f"   🍔 Ингредиентов: {len(data['data'])}")
+                        logger.info(f"Ингредиентов: {len(data['data'])}")
                 except json.JSONDecodeError:
-                    print(f"   ❌ Ответ не в JSON формате: {response.text[:100]}...")
+                    logger.error(f"Ответ не в JSON формате: {response.text[:100]}...")
             else:
-                print(f"   📝 Ответ: {response.text[:200]}...")
+                logger.info(f"Ответ: {response.text[:200]}...")
+                
+            results[endpoint_name] = {
+                "status": response.status_code,
+                "success": True
+            }
                 
         except requests.exceptions.ConnectionError:
-            print(f"   ❌ Ошибка соединения")
+            logger.error("Ошибка соединения")
+            results[endpoint_name] = {"status": "ConnectionError", "success": False}
         except requests.exceptions.Timeout:
-            print(f"   ⏰ Таймаут запроса")
+            logger.error("Таймаут запроса")
+            results[endpoint_name] = {"status": "Timeout", "success": False}
         except Exception as e:
-            print(f"   ❌ Ошибка: {e}")
+            logger.error(f"Ошибка: {e}")
+            results[endpoint_name] = {"status": str(e), "success": False}
+    
+    return results
 
 
 if __name__ == "__main__":

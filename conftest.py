@@ -40,16 +40,6 @@ def registered_user(generate_unique_user):
     
     yield user_data
     
-    # Пост-условия можно добавить здесь при необходимости
-    # (например, удаление тестового пользователя если есть такой эндпоинт)
-
-
-@pytest.fixture
-def authenticated_user(registered_user):
-    """Пользователь с гарантированной аутентификацией"""
-    # Дополнительная логика проверки/обновления токена при необходимости
-    return registered_user
-
 
 @pytest.fixture
 def get_ingredients():
